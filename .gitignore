@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Bun is the frontend package manager. Ignore lockfiles from other tools.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Secrets and local overrides. Example files stay tracked.
+.env
+.env.local
+.env.*.local
+
+# Generated evaluation reports. The datasets stay tracked.
+evaluation/results/*.json
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
+# OS
+.DS_Store

@@ -1,0 +1,9 @@
+{
+  "name": "repolens-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "typescript": "6.0.3"
+  }
+}

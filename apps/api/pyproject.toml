@@ -1,0 +1,25 @@
+[project]
+name = "repolens-api"
+version = "0.1.0"
+description = "RepoLens HTTP API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.143.0",
+  "fastembed==0.7.4",
+  "httpx2==2.13.1",
+  "psycopg[binary]==3.3.6",
+  "pydantic==2.14.0",
+  "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

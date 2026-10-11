@@ -1,0 +1,16 @@
+{
+  "name": "example",
+  "description": "Two questions for the math.ts and main.ts fixture used in the API tests.",
+  "questions": [
+    {
+      "id": "sum",
+      "question": "how are two numbers summed?",
+      "expected_paths": ["src/math.ts"]
+    },
+    {
+      "id": "add",
+      "question": "add",
+      "expected_paths": ["src/math.ts"]
+    }
+  ]
+}
