@@ -22,6 +22,8 @@ export function MarkdownAnswer({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Image URLs come from repository text. Show the alt text and never fetch them.
+          img: ({ alt }) => (alt ? <span>{alt}</span> : null),
           a: ({ href, children }) => {
             const match = href?.match(/^#cite-(\d+)$/);
             if (!match) {

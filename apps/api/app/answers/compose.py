@@ -243,13 +243,18 @@ def _json_field(snippet: str, field: str) -> str | None:
 def _readme_sentence(snippet: str) -> str | None:
     for raw in snippet.splitlines():
         text = _collapse(re.sub(r"^#+\s*", "", raw.strip()))
-        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-        if len(text) < 24 or text[:1] in "-*`{[":
+        # Drop images before links: a badge is written [![alt](image)](link).
+        text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+        text = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", text)
+        text = _collapse(re.sub(r"<[^>]+>", "", text))
+        if len(text) < 24 or text[:1] in "-*`{[!|>":
             continue
         if not text.endswith("."):
             text += "."
-        lowered = text[0].lower() + text[1:]
-        return lowered
+        # Keep an acronym such as "SWR" as written.
+        if text[1:2].isupper():
+            return text
+        return text[0].lower() + text[1:]
     return None
 
 

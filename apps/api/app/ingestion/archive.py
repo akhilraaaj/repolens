@@ -98,9 +98,9 @@ def inspect_archive(
                 try:
                     text = data.decode("utf-8")
                 except UnicodeDecodeError:
-                    entries.append(
-                        ArchiveEntry(path, "failed", "not_utf8", len(data), None, None)
-                    )
+                    # Design files such as .ai or .psd have no early NUL byte. One of them
+                    # should not fail the whole snapshot; skip it like any binary file.
+                    entries.append(_skipped(path, "not_utf8", len(data)))
                     continue
                 if stored + 1 > limits.max_stored_files:
                     raise LimitReached(

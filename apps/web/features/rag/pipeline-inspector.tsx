@@ -71,7 +71,7 @@ export function PipelineInspector({
           </>
         ) : null}
       </div>
-      <ol className="mt-3 flex items-stretch gap-1 overflow-x-auto pb-1">
+      <ol className="mt-3 flex flex-wrap items-stretch gap-1 pb-1">
         {cards.map((card, index) => (
           <li
             key={card.id}
@@ -219,18 +219,22 @@ function StageTable({ note, hits, columns, onOpen }: { note: string; hits: Stage
                       {formatCell(hit[column])}
                     </td>
                   ))}
-                  <td className="max-w-[260px] px-2 py-1">
+                  <td className="px-2 py-1">
+                    {/* A table cell does not enforce max-width, so the button carries it. */}
                     <button
                       type="button"
                       onClick={() => onOpen({ path: hit.path, start: hit.start_line, end: hit.end_line })}
-                      className="block truncate font-mono text-fg hover:text-brand"
+                      className="flex max-w-[260px] min-w-0 font-mono text-fg hover:text-brand"
                       title={`${hit.path}:${hit.start_line}-${hit.end_line}`}
                     >
-                      {hit.path}:{hit.start_line}-{hit.end_line}
+                      <span className="truncate">{hit.path}</span>
+                      <span className="shrink-0">
+                        :{hit.start_line}-{hit.end_line}
+                      </span>
                     </button>
                   </td>
                   <td className="px-2 py-1">
-                    <span className="flex gap-1">
+                    <span className="flex shrink-0 gap-1">
                       {hit.methods.map((method) => (
                         <Badge key={method} variant={method === "vector" ? "info" : method === "reranked" ? "warn" : "brand"} className="h-4 px-1.5 text-[9px]">
                           {method}

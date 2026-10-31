@@ -12,13 +12,32 @@ type Props = {
   onOpen: (file: OpenFile) => void;
 };
 
+// The first guide can take a minute when a chat model writes it. The view
+// unmounts on every tab switch, so share one request per version instead of
+// asking the model again each time the tab is opened. Once it settles, the
+// API's stored copy answers the next request.
+const pending = new Map<string, Promise<Documentation>>();
+
+function loadDocumentation(versionId: string): Promise<Documentation> {
+  let request = pending.get(versionId);
+  if (!request) {
+    request = api<Documentation>(`/ingestions/${versionId}/documentation`);
+    pending.set(versionId, request);
+    request.then(
+      () => pending.delete(versionId),
+      () => pending.delete(versionId),
+    );
+  }
+  return request;
+}
+
 export function DocsView({ versionId, onOpen }: Props) {
   const [doc, setDoc] = useState<Documentation | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    api<Documentation>(`/ingestions/${versionId}/documentation`)
+    loadDocumentation(versionId)
       .then((next) => {
         if (!cancelled) {
           setDoc(next);
@@ -46,8 +65,11 @@ export function DocsView({ versionId, onOpen }: Props) {
   }
   if (doc === null) {
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-        <Spinner /> Writing the guide
+      <div className="flex h-full flex-col items-center justify-center gap-1.5 text-sm text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <Spinner /> Writing the guide
+        </span>
+        <span className="text-xs text-faint">With a chat model, the first guide can take a minute.</span>
       </div>
     );
   }

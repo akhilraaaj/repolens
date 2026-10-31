@@ -70,16 +70,18 @@ def test_archive_skips_oversized_file_and_binary_content() -> None:
     assert by_path["src/notes.txt"].disposition == "stored"
 
 
-def test_archive_records_invalid_utf8_as_failed() -> None:
-    payload = archive_bytes({"src/broken.ts": b"\xff"})
+def test_archive_skips_invalid_utf8_and_keeps_the_snapshot() -> None:
+    payload = archive_bytes({"media/logo.ai": b"%PDF-1.5\n\xff\xfe", "src/index.ts": b"export const a = 1;\n"})
 
     inspection = inspect_archive(payload, IngestionLimits())
+    by_path = {entry.path: entry for entry in inspection.entries}
 
-    assert inspection.entries[0].disposition == "failed"
-    assert inspection.entries[0].reason == "not_utf8"
+    assert by_path["media/logo.ai"].disposition == "skipped"
+    assert by_path["media/logo.ai"].reason == "not_utf8"
+    assert by_path["src/index.ts"].disposition == "stored"
     status, error_code, _message = decide_status(inspection.entries)
-    assert status == "failed"
-    assert error_code == "partial_failure"
+    assert status == "completed_with_skips"
+    assert error_code is None
 
 
 def test_archive_keeps_files_seen_before_a_limit() -> None:

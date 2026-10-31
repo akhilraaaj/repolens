@@ -9,6 +9,7 @@ RepoLens stores source from a repository the operator chose and answers question
 - A file path in a question, a tool call, or a viewer request that leaves the stored tree.
 - A model treating a comment or README as an instruction to ignore the system prompt or to call a tool outside the snapshot.
 - An API key being returned to the browser or written into the repository.
+- Repository text making the browser fetch a remote URL, such as a README badge that ends up in an answer.
 
 ## What the controls are
 
@@ -17,6 +18,7 @@ RepoLens stores source from a repository the operator chose and answers question
 - The TypeScript parser receives file text on stdin. It does not execute the repository, and it does not follow a tsconfig `extends`.
 - Tool calls are read-only, limited to six, and use the same path check. Tool results are truncated.
 - Chat answers keep a paragraph only when it cites a numbered evidence item from the snapshot.
+- Answers render Markdown images as their alt text and never load the image. Links outside citations render as plain text. The extractive fallback strips images, links, and HTML tags from README lines.
 - Provider keys live in PostgreSQL. `GET /provider` and `GET /config` do not include them. A base URL with embedded credentials is rejected.
 - Source is sent to a hosted model only after the operator saves a hosted provider. The default is no model.
 

@@ -89,8 +89,12 @@ export function CodeViewer({
       return;
     }
     const target = container.querySelector(".line.cited");
+    // Scroll only this pane, and only vertically. scrollIntoView also moved it
+    // sideways to a wide cited line, which hid the gutter.
+    container.scrollLeft = 0;
     if (target instanceof HTMLElement) {
-      target.scrollIntoView({ block: "center" });
+      const offset = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      container.scrollTop += offset - (container.clientHeight - target.offsetHeight) / 2;
     } else {
       container.scrollTop = 0;
     }

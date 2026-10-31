@@ -29,7 +29,7 @@ import { colorsByCluster } from "./colors";
 import { MapInspector } from "./map-inspector";
 import { buildModel, folderChain, initialExpansion, neighborhood, nodeSize, type MapNodeData } from "./map-model";
 import { layoutModel, type Positions } from "./layout";
-import { orbitLayout, orbBox, clusterKey, type Halo } from "./orbit";
+import { orbitLayout, orbBox, clusterKey, haloLabel, type Halo } from "./orbit";
 
 type NodeData = MapNodeData & { dimmed: boolean; selected: boolean; cited: boolean; onTrace: boolean; color: string };
 type FlowNode = Node<NodeData>;
@@ -396,7 +396,7 @@ function haloNodes(halos: Halo[]): HaloNode[] {
     position: { x: halo.cx - halo.radius, y: halo.cy - halo.radius },
     width: halo.radius * 2,
     height: halo.radius * 2,
-    data: { label: halo.label === "(root)" || halo.label === "packages" ? halo.label : (halo.label.split("/").at(-1) ?? halo.label), color: halo.color },
+    data: { label: haloLabel(halo.label), color: halo.color },
     draggable: false,
     selectable: false,
     connectable: false,
@@ -518,7 +518,7 @@ const OrbNode = memo(function OrbNode({ data }: NodeProps<FlowNode>) {
 function HaloRing({ data }: NodeProps<HaloNode>) {
   return (
     <div className="relative h-full w-full rounded-full border border-dashed" style={{ borderColor: `color-mix(in oklab, ${data.color} 45%, transparent)` }}>
-      <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/80 px-2 font-mono text-[10px] text-muted-foreground">
+      <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-background/80 px-2 font-mono text-[10px] text-muted-foreground">
         {data.label}
       </span>
     </div>
@@ -527,4 +527,4 @@ function HaloRing({ data }: NodeProps<HaloNode>) {
 
 const NODE_TYPES = { folder: FolderNode, file: FileNode, package: PackageNode, orb: OrbNode, halo: HaloRing };
 const FIT_VIEW = { padding: 0.16, maxZoom: 1.05 };
-const ORB_FIT = { padding: 0.2, minZoom: 0.68, maxZoom: 1.35 };
+const ORB_FIT = { padding: 0.12, minZoom: 0.3, maxZoom: 1.35 };

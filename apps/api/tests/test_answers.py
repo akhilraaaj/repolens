@@ -64,3 +64,21 @@ def test_return_question_quotes_the_return_expression() -> None:
 
     assert answer.startswith("add returns left + right. That is in src/math.ts.")
     assert "payment" not in answer.lower()
+
+
+def test_readme_badges_are_not_quoted_as_prose() -> None:
+    readme = (
+        "[![SWR](https://example.com/banner.png)](https://swr.example)\n\n"
+        '<p align="center"><img src="https://example.com/badge.svg"></p>\n\n'
+        "## Introduction\n\n"
+        "SWR is a React Hooks library for [data fetching](https://swr.example/docs).\n"
+    )
+    answer = compose_answer(
+        "How are errors handled?",
+        [{"path": "README.md", "start_line": 1, "end_line": 7, "snippet": readme}],
+        {"README.md": readme},
+    )
+
+    assert "The README says SWR is a React Hooks library for data fetching." in answer
+    assert "](" not in answer
+    assert "<" not in answer

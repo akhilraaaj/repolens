@@ -77,7 +77,7 @@ Defaults, overridable with positive integers:
 | Stored text | 64 MiB | `REPOLENS_MAX_TOTAL_BYTES` |
 | Wall clock | 180 seconds | `REPOLENS_MAX_DURATION_SECONDS` |
 
-These defaults fit a repository the size of `fastapi/fastapi`. A live snapshot stored 2,987 text files and about 18 MiB of source and docs, and skipped 195 binary or oversized files. A single oversized file is skipped with `file_too_large`. Crossing an archive, entry, stored-file, total-text, or time limit fails the version with `limit_exceeded`. Extract limits keep the file rows classified before the stop. The download-size limit has no rows, because the tar is not opened.
+These defaults fit a repository the size of `fastapi/fastapi`. A live snapshot stored 2,987 text files and about 18 MiB of source and docs, and skipped 195 binary or oversized files. A single oversized file is skipped with `file_too_large`. A file with a NUL byte in its first 8 KiB is skipped as `binary`, and one that is not valid UTF-8 (for example an Illustrator `.ai` file) is skipped as `not_utf8`. Neither fails the snapshot. Crossing an archive, entry, stored-file, total-text, or time limit fails the version with `limit_exceeded`. Extract limits keep the file rows classified before the stop. The download-size limit has no rows, because the tar is not opened.
 
 `progress_completed` is written when the version finishes. While the task is still extracting, a poll can show phase `extracting` and progress `0`.
 

@@ -106,14 +106,14 @@ export function BriefView({ record, overview, error, onOpen, onShowMap }: Props)
           </ul>
         ) : null}
 
-        <div className="grid gap-10 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
           <Section icon={<Layers size={14} />} title="Stack" hint="From dependencies and marker files">
             {groups.length === 0 ? (
               <p className="text-sm text-faint">No known packages or marker files.</p>
             ) : (
               <dl className="space-y-2.5">
                 {groups.map(([category, items]) => (
-                  <div key={category} className="grid grid-cols-[96px_1fr] items-start gap-3">
+                  <div key={category} className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3">
                     <dt className="pt-0.5 text-xs text-faint">{CATEGORY_LABELS[category] ?? category}</dt>
                     <dd className="flex flex-wrap gap-1.5">
                       {items.map((item) => (
@@ -266,7 +266,7 @@ function Section({ icon, title, hint, children }: { icon: ReactNode; title: stri
       <div className="mb-3 flex items-baseline gap-2">
         <span className="translate-y-0.5 text-muted-foreground">{icon}</span>
         <h2 className="text-sm font-medium">{title}</h2>
-        {hint ? <span className="ml-auto truncate text-[11px] text-faint">{hint}</span> : null}
+        {hint ? <span className="ml-auto min-w-0 truncate text-[11px] text-faint">{hint}</span> : null}
       </div>
       {children}
     </section>

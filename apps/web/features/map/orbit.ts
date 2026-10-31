@@ -42,7 +42,7 @@ export function orbitLayout(nodes: MapNodeData[]): OrbitLayout {
     return left.localeCompare(right);
   });
   const radii = keys.map((key) => clusterRadius(groups.get(key)?.length ?? 1));
-  const ring = keys.length <= 1 ? 0 : average(radii) + 64;
+  const ring = keys.length <= 1 ? 0 : ringRadius(keys, radii);
   const positions: Positions = {};
   const halos: Halo[] = [];
   const palette = colorsByCluster(keys);
@@ -95,11 +95,28 @@ function clusterRadius(count: number): number {
   return 16 + Math.sqrt(count - 1) * 14 + 26;
 }
 
-function average(values: number[]): number {
-  if (values.length === 0) {
-    return 0;
-  }
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+/** Halo labels are 10px mono with 8px padding each side. */
+const LABEL_CHAR = 6.2;
+const LABEL_PAD = 16;
+const HALO_GAP = 18;
+
+/**
+ * Large enough that each cluster's arc holds its halo and its label.
+ * The old average-based radius packed 20+ folders into overlapping circles.
+ */
+function ringRadius(keys: string[], radii: number[]): number {
+  const arc = keys.reduce((sum, key, index) => {
+    const halo = (radii[index] ?? 32) * 2 + HALO_GAP;
+    const label = haloLabel(key).length * LABEL_CHAR + LABEL_PAD + HALO_GAP;
+    return sum + Math.max(halo, label);
+  }, 0);
+  const average = radii.reduce((sum, value) => sum + value, 0) / radii.length;
+  return Math.max(average + 64, arc / (Math.PI * 2));
+}
+
+/** The text a halo shows: the last folder segment, except for the two fixed groups. */
+export function haloLabel(key: string): string {
+  return key === "(root)" || key === "packages" ? key : (key.split("/").at(-1) ?? key);
 }
 
 export function orbBox(kind: MapNodeData["kind"], fileCount: number): { width: number; height: number } {
