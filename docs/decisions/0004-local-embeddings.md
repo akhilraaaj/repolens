@@ -10,7 +10,7 @@ The product needs keyword search, embeddings, and grounded answers without requi
 
 ## Decision
 
-Chunks are stored in PostgreSQL. Keyword search uses `websearch_to_tsquery` plus a case-insensitive substring match.
+Chunks are stored in PostgreSQL. Keyword search ORs the question's words into a `to_tsquery` and adds a case-insensitive substring match. It first used `websearch_to_tsquery`, which requires every word, so a question in plain English almost never matched.
 
 The default embedding is `sentence-transformers/all-MiniLM-L6-v2`, loaded locally by fastembed. It writes 384-number vectors into pgvector. Hybrid search uses reciprocal rank fusion. A vector neighbor is returned only when cosine distance is at most 0.75.
 

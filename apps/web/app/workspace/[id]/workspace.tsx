@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, LayoutDashboard, MessageSquare, Network, RefreshCw, Search, Settings2, type LucideIcon } from "lucide-react";
+import { FileText, LayoutDashboard, MessageSquare, Network, RefreshCw, Search, Settings2, Sparkles, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 
@@ -15,6 +15,7 @@ import { ChatPanel } from "../../../features/chat/chat-panel";
 import { CodeViewer, type OpenFile } from "../../../features/code/code-viewer";
 import { CommandPalette } from "../../../features/command/command-palette";
 import { IndexingStepper } from "../../../features/ingest/indexing-stepper";
+import { GRAPH_COLORS } from "../../../features/map/colors";
 import { RepoMap } from "../../../features/map/repo-map";
 import { BriefView } from "../../../features/brief/brief-view";
 import { DocsView } from "../../../features/docs/docs-view";
@@ -33,16 +34,17 @@ const VIEWS: { id: ViewId; label: string; hint: string; icon: LucideIcon }[] = [
 
 const EMPTY_GRAPH: Graph = { symbols: [], relationships: [], truncated: false };
 
-export function Workspace({ id }: { id: string }) {
+export function Workspace({ id, initialView = null }: { id: string; initialView?: string | null }) {
   const [record, setRecord] = useState<Ingestion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [graph, setGraph] = useState<Graph>(EMPTY_GRAPH);
-  const [view, setView] = useState<ViewId>("overview");
+  const [view, setView] = useState<ViewId>(() => VIEWS.find((item) => item.id === initialView)?.id ?? "overview");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [featureTrace, setFeatureTrace] = useState<string[]>([]);
   const [provider, setProvider] = useState<ProviderSettings | null>(null);
   const [providerOpen, setProviderOpen] = useState(false);
+  const [serverChat, setServerChat] = useState(false);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
@@ -76,6 +78,10 @@ export function Workspace({ id }: { id: string }) {
         setProvider(settings);
         setProviderOpen(!settings.configured);
       })
+      .catch(() => undefined);
+    // A model set in the API's environment is not a saved provider, so /provider does not show it.
+    api<{ chat_configured: boolean }>("/config")
+      .then((config) => setServerChat(config.chat_configured))
       .catch(() => undefined);
   }, [refresh]);
 
@@ -124,6 +130,35 @@ export function Workspace({ id }: { id: string }) {
   );
 
   const open = useCallback((file: OpenFile) => setOpenFile(file), []);
+  const chatLabel = provider?.provider && provider.provider !== "none" ? provider.model : serverChat ? "Model from server settings" : null;
+
+  // The address follows the open view, so ?view=map can be shared and reopened.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("view") !== view) {
+      url.searchParams.set("view", view);
+      window.history.replaceState(null, "", url);
+    }
+  }, [view]);
+
+  // 1 to 4 switch views, unless the key is typed into a field.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) {
+        return;
+      }
+      const next = VIEWS[Number(event.key) - 1];
+      if (next) {
+        setView(next.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   if (record === null) {
     return (
@@ -149,7 +184,7 @@ export function Workspace({ id }: { id: string }) {
         onRebuild={() => void analyze()}
         onPalette={() => setPaletteOpen(true)}
         onSettings={() => setProviderOpen(true)}
-        chatLabel={provider?.provider && provider.provider !== "none" ? provider.model : null}
+        chatLabel={chatLabel}
       />
       {error ? (
         <div className="border-b border-line px-4 py-2">
@@ -164,7 +199,15 @@ export function Workspace({ id }: { id: string }) {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <Rail view={view} onView={setView} cited={highlighted.length} />
+          <Sidebar
+            view={view}
+            onView={setView}
+            cited={highlighted.length}
+            record={record}
+            overview={overview}
+            chatLabel={chatLabel}
+            onSettings={() => setProviderOpen(true)}
+          />
           <Group orientation="horizontal" className="min-h-0 flex-1">
             <Panel id="main" minSize={340} className="relative flex min-h-0 flex-col">
               {view !== "ask" ? (
@@ -231,45 +274,113 @@ export function Workspace({ id }: { id: string }) {
   );
 }
 
-function Rail({ view, onView, cited }: { view: ViewId; onView: (view: ViewId) => void; cited: number }) {
+function Sidebar({
+  view,
+  onView,
+  cited,
+  record,
+  overview,
+  chatLabel,
+  onSettings,
+}: {
+  view: ViewId;
+  onView: (view: ViewId) => void;
+  cited: number;
+  record: Ingestion;
+  overview: Overview | null;
+  chatLabel: string | null;
+  onSettings: () => void;
+}) {
+  const languages = overview?.summary.languages ?? [];
+  const search =
+    record.embedding_status === "running"
+      ? { tone: "bg-warn animate-pulse", text: record.progress_total ? `Indexing ${record.progress_completed ?? 0}/${record.progress_total}` : "Indexing" }
+      : record.embedding_status === "failed"
+        ? { tone: "bg-danger", text: "Vector search off" }
+        : { tone: "bg-brand", text: "Search ready" };
   return (
-    <nav role="tablist" aria-label="Views" aria-orientation="vertical" className="flex w-[72px] shrink-0 flex-col items-center gap-1 border-r border-line bg-panel/60 py-3">
-      {VIEWS.map((item) => {
-        const active = view === item.id;
-        return (
-          <Tooltip key={item.id}>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  aria-label={item.label}
-                  onClick={() => onView(item.id)}
-                  className={cn(
-                    "group relative flex w-14 flex-col items-center gap-1 rounded-xl py-2 text-[10px] transition-colors",
-                    active ? "text-fg" : "text-muted-foreground hover:text-fg",
-                  )}
-                />
-              }
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute inset-0 rounded-xl border transition-all duration-200",
-                  active ? "border-line-strong bg-raised" : "border-transparent group-hover:bg-hover/60",
-                )}
-              />
-              <item.icon size={18} className={cn("relative", active && "text-brand")} />
-              <span className="relative">{item.label}</span>
-              {item.id === "ask" && cited > 0 ? <span className="absolute top-1 right-2 size-1.5 rounded-full bg-brand" /> : null}
-            </TooltipTrigger>
-            <TooltipContent side="right">{item.hint}</TooltipContent>
-          </Tooltip>
-        );
-      })}
-    </nav>
+    <aside className="flex w-16 shrink-0 flex-col border-r border-line bg-canvas lg:w-60">
+      <nav role="tablist" aria-label="Views" aria-orientation="vertical" className="flex flex-col gap-0.5 p-2 pt-3 lg:px-3">
+        <p className="hidden px-2.5 pb-2 text-[10px] font-medium tracking-[0.16em] text-faint uppercase lg:block">Explore</p>
+        {VIEWS.map((item, index) => {
+          const active = view === item.id;
+          return (
+            <Tooltip key={item.id}>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-label={item.label}
+                    onClick={() => onView(item.id)}
+                    className={cn(
+                      "group relative flex h-10 items-center justify-center gap-3 rounded-lg px-2.5 text-[13px] transition-colors lg:h-9 lg:justify-start",
+                      active ? "bg-hover text-fg" : "text-muted-foreground hover:bg-hover/50 hover:text-fg",
+                    )}
+                  />
+                }
+              >
+                <item.icon size={16} className={cn("shrink-0 transition-colors", active ? "text-brand" : "text-faint group-hover:text-muted-foreground")} />
+                <span className="hidden lg:inline">{item.label}</span>
+                {item.id === "ask" && cited > 0 ? <span className="absolute top-2 right-2 size-1.5 rounded-full bg-brand lg:static lg:ml-1" /> : null}
+                <Kbd className="ml-auto hidden lg:inline-flex">{index + 1}</Kbd>
+              </TooltipTrigger>
+              <TooltipContent side="right">{item.hint}</TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </nav>
+
+      <div className="mt-auto hidden space-y-2 p-3 lg:block">
+        <div className="rounded-xl border border-line bg-panel/60 p-3">
+          <p className="text-[10px] font-medium tracking-[0.16em] text-faint uppercase">This commit</p>
+          <p className="mt-2 truncate text-[13px] font-medium text-fg">
+            {record.owner}/{record.name}
+          </p>
+          <p className="font-mono text-[11px] text-faint">{record.commit_sha.slice(0, 12)}</p>
+          {languages.length > 0 ? (
+            <div className="mt-3 flex h-1 gap-px overflow-hidden rounded-full bg-raised" title={languages.map((item) => `${item.language} ${(item.share * 100).toFixed(0)}%`).join(" · ")}>
+              {languages.map((item, index) => (
+                <span key={item.language} style={{ width: `${item.share * 100}%`, background: GRAPH_COLORS[index % GRAPH_COLORS.length] }} />
+              ))}
+            </div>
+          ) : null}
+          <dl className="mt-3 grid grid-cols-3 gap-2">
+            <Stat label="files" value={record.stored_count} />
+            <Stat label="symbols" value={record.symbol_count ?? 0} />
+            <Stat label="links" value={record.relationship_count ?? 0} />
+          </dl>
+          <p className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground" title={record.embedding_error ?? undefined}>
+            <span className={cn("size-1.5 rounded-full", search.tone)} />
+            {search.text}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onSettings}
+          className="flex h-9 w-full items-center gap-2 rounded-lg border border-line px-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-line-strong hover:text-fg"
+        >
+          <Sparkles size={13} className={chatLabel ? "text-brand" : "text-faint"} />
+          <span className="min-w-0 flex-1 truncate">{chatLabel ?? "No chat model"}</span>
+          <Settings2 size={13} className="shrink-0 text-faint" />
+        </button>
+      </div>
+    </aside>
   );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <dd className="font-mono text-[13px] text-fg tabular-nums">{compact(value)}</dd>
+      <dt className="text-[10px] text-faint">{label}</dt>
+    </div>
+  );
+}
+
+function compact(value: number): string {
+  return value >= 10_000 ? `${Math.round(value / 1000)}k` : value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
 }
 
 function TopBar({
@@ -294,9 +405,9 @@ function TopBar({
         : "embedding"
       : null;
   return (
-    <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-line bg-panel px-4">
+    <header className="relative z-10 flex h-12 shrink-0 items-center gap-3 border-b border-line bg-canvas/80 px-4 backdrop-blur">
       <Logo />
-      <span className="text-line-strong">/</span>
+      <span className="text-faint">/</span>
       <a
         href={record.canonical_url ?? `https://github.com/${record.owner}/${record.name}`}
         target="_blank"

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("the landing page accepts a repository and can be used from the keyboard", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Understand any repository/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /See a codebase before you read it/ })).toBeVisible();
   const input = page.getByRole("textbox", { name: "GitHub repository" });
   await input.focus();
   await expect(input).toBeFocused();

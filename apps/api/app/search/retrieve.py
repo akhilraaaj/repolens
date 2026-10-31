@@ -1,5 +1,6 @@
 """Keyword search and reciprocal-rank fusion with vectors."""
 
+import re
 from time import perf_counter
 from uuid import UUID
 
@@ -10,6 +11,13 @@ from app.search.rerank import rerank, rerank_enabled
 from app.search.vectors import vector_ranking
 
 RRF_K = 60
+
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_PART = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
+# Words that phrase a question but say nothing about the code. The english
+# text-search configuration already drops "where", "is", "the", and the like.
+_FILLER = {"use", "used", "uses", "using", "work", "works", "happen", "happens", "explain", "tell", "show", "find", "get", "make", "mean", "means", "code", "repo", "repository"}
+_MAX_TERMS = 16
 
 
 def search_version(connection: psycopg.Connection, version_id: UUID, query: str, limit: int = 20) -> list[dict]:
@@ -134,8 +142,44 @@ def _load_rows(connection: psycopg.Connection, ids: list[UUID]) -> dict:
     return {row["id"]: row for row in rows}
 
 
+def keyword_terms(query: str) -> list[str]:
+    """The words worth matching, lowercased. A camelCase or snake_case name also contributes its parts."""
+
+    terms: list[str] = []
+    for word in _WORD.findall(query):
+        candidates = [word]
+        if _is_identifier(word):
+            candidates += _PART.findall(word.replace("_", " "))
+        for candidate in candidates:
+            lowered = candidate.lower()
+            if len(lowered) >= 2 and lowered not in _FILLER and lowered not in terms:
+                terms.append(lowered)
+    return terms[:_MAX_TERMS]
+
+
+def identifier_terms(query: str) -> list[str]:
+    """Names written the way code writes them, such as dedupingInterval or use_swr."""
+
+    return [word for word in dict.fromkeys(_WORD.findall(query)) if _is_identifier(word)][:_MAX_TERMS]
+
+
+def _is_identifier(word: str) -> bool:
+    inner = word[1:]
+    return len(word) >= 3 and ("_" in word.strip("_") or (inner != inner.lower() and word != word.upper()))
+
+
+def _like(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def _keyword_ids(connection: psycopg.Connection, version_id: UUID, query: str, limit: int) -> list[UUID]:
-    pattern = f"%{query.strip()}%"
+    # Any matching word counts, and ts_rank puts chunks that match more of them first.
+    # websearch_to_tsquery required every word of a question to appear in one chunk,
+    # so a full question almost never matched.
+    terms = " | ".join(keyword_terms(query))
+    identifiers = [_like(word) for word in identifier_terms(query)]
+    pattern = _like(query.strip())
     try:
         rows = connection.execute(
             """
@@ -143,17 +187,15 @@ def _keyword_ids(connection: psycopg.Connection, version_id: UUID, query: str, l
             FROM code_chunks
             WHERE repository_version_id = %s
               AND (
-                (
-                  websearch_to_tsquery('english', %s)::text <> ''
-                  AND content_tsv @@ websearch_to_tsquery('english', %s)
-                )
+                (%s <> '' AND content_tsv @@ to_tsquery('english', %s))
                 OR path ILIKE %s
                 OR content ILIKE %s
+                OR content ILIKE ANY(%s)
               )
-            ORDER BY ts_rank(content_tsv, websearch_to_tsquery('english', %s)) DESC, path, start_line
+            ORDER BY content ILIKE ANY(%s) DESC, ts_rank(content_tsv, to_tsquery('english', %s)) DESC, path, start_line
             LIMIT %s
             """,
-            (version_id, query, query, pattern, pattern, query, limit),
+            (version_id, terms, terms, pattern, pattern, identifiers, identifiers, terms, limit),
         ).fetchall()
     except psycopg.Error:
         connection.rollback()

@@ -7,11 +7,18 @@ export const metadata: Metadata = {
   description: "Overview, guide, architecture map, and cited answers for one commit.",
 };
 
-export default async function WorkspacePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function WorkspacePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string | string[] }>;
+}) {
   const { id } = await params;
+  const { view } = await searchParams;
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <Workspace id={id} />
+      <Workspace id={id} initialView={typeof view === "string" ? view : null} />
     </main>
   );
 }

@@ -163,17 +163,39 @@ body {
   --xy-edge-stroke: var(--color-line-strong);
 }
 
-.react-flow__node-orb,
-.react-flow__node-halo {
+.react-flow__node-cluster {
   overflow: visible;
   background: transparent;
   border: none;
   box-shadow: none;
 }
 
-.react-flow__node-halo {
-  pointer-events: none;
-  z-index: 0;
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes art-float {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.edge-flow {
+  stroke-dasharray: 2 10;
+  animation: edge-flow 1.8s linear infinite;
+}
+
+.art-float {
+  animation: art-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-flow,
+  .art-float {
+    animation: none;
+  }
 }
 
 @theme inline {

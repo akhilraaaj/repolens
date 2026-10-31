@@ -17,14 +17,18 @@ export function MapInspector({
   onExpand,
   onCollapse,
   onReveal,
+  members,
 }: {
   node: MapNodeData;
   graph: FileGraph;
   onClose: () => void;
   onOpen: (file: OpenFile) => void;
-  onExpand: (folder: string) => void;
-  onCollapse: (folder: string) => void;
+  /** Omitted where folders cannot be expanded, as in the Orbs view. */
+  onExpand?: (folder: string) => void;
+  onCollapse?: (folder: string) => void;
   onReveal: (path: string) => void;
+  /** The files to list for a folder, when they are not simply the paths under it. */
+  members?: FileGraph["files"];
 }) {
   const links = useMemo(() => {
     if (node.kind !== "file" || !node.file) {
@@ -41,11 +45,11 @@ export function MapInspector({
     if (node.kind !== "folder") {
       return [];
     }
-    return graph.files
-      .filter((file) => file.path.startsWith(`${node.sublabel}/`))
+    return (members ?? graph.files.filter((file) => file.path.startsWith(`${node.sublabel}/`)))
+      .slice()
       .sort((left, right) => right.symbol_count - left.symbol_count)
       .slice(0, 12);
-  }, [graph.files, node]);
+  }, [graph.files, node, members]);
 
   return (
     <aside className="absolute bottom-3 right-3 top-14 flex w-80 flex-col overflow-hidden rounded-xl border border-line-strong bg-panel">
@@ -66,21 +70,23 @@ export function MapInspector({
               <Badge variant="outline">{node.fileCount} files</Badge>
               <Badge variant="outline">{node.symbolCount} symbols</Badge>
             </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => onExpand(node.sublabel)}>
-                <ChevronsUpDown /> Expand
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => onCollapse(node.sublabel.split("/").slice(0, -1).join("/") || node.sublabel)}>
-                <ChevronsDownUp /> Collapse parent
-              </Button>
-            </div>
+            {onExpand && onCollapse ? (
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => onExpand(node.sublabel)}>
+                  <ChevronsUpDown /> Expand
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => onCollapse(node.sublabel.split("/").slice(0, -1).join("/") || node.sublabel)}>
+                  <ChevronsDownUp /> Collapse parent
+                </Button>
+              </div>
+            ) : null}
             <div>
               <p className={EYEBROW}>Largest files</p>
               <ul className="mt-2 space-y-0.5">
                 {folderFiles.map((file) => (
                   <li key={file.path}>
                     <button type="button" onClick={() => onReveal(file.path)} className={ROW}>
-                      <span className="truncate">{file.path.slice(node.sublabel.length + 1)}</span>
+                      <span className="truncate">{file.path.startsWith(`${node.sublabel}/`) ? file.path.slice(node.sublabel.length + 1) : file.path}</span>
                       <span className="ml-auto text-faint">{file.symbol_count}</span>
                     </button>
                   </li>

@@ -76,6 +76,17 @@ def test_search_impact_and_grounded_answer(client) -> None:
     assert missing_payload["citations"] == []
 
 
+def test_keyword_search_matches_a_question_whose_words_are_not_all_in_one_chunk(client) -> None:
+    version_id = _seed_snapshot({"src/math.ts": MATH, "src/main.ts": MAIN})
+    assert client.post(f"/ingestions/{version_id}/analysis").status_code == 200
+
+    # "helper" and "numbers" appear nowhere. Before, every word had to match.
+    found = client.get(f"/ingestions/{version_id}/search", params={"q": "Where is the add helper used on numbers?"})
+    assert found.status_code == 200
+    keyword = [item for item in found.json()["results"] if "keyword" in item["methods"]]
+    assert {item["path"] for item in keyword} >= {"src/math.ts", "src/main.ts"}
+
+
 def test_file_path_must_stay_inside_the_snapshot(client) -> None:
     version_id = _seed_snapshot({"src/math.ts": MATH})
     client.post(f"/ingestions/{version_id}/analysis")

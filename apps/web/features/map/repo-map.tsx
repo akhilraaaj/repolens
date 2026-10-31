@@ -29,11 +29,10 @@ import { colorsByCluster } from "./colors";
 import { MapInspector } from "./map-inspector";
 import { buildModel, folderChain, initialExpansion, neighborhood, nodeSize, type MapNodeData } from "./map-model";
 import { layoutModel, type Positions } from "./layout";
-import { orbitLayout, orbBox, clusterKey, haloLabel, type Halo } from "./orbit";
+import { OrbMap, type OrbTarget } from "./orb-map";
 
 type NodeData = MapNodeData & { dimmed: boolean; selected: boolean; cited: boolean; onTrace: boolean; color: string };
 type FlowNode = Node<NodeData>;
-type HaloNode = Node<{ label: string; color: string }, "halo">;
 type MapMode = "orbs" | "graph";
 
 export type MapProps = {
@@ -60,6 +59,7 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
   const [layout, setLayout] = useState<{ key: string; positions: Positions } | null>(null);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<MapMode>("orbs");
+  const [orbTarget, setOrbTarget] = useState<OrbTarget>(null);
   const { setCenter } = useReactFlow();
 
   const pathsKey = paths.join("|");
@@ -76,8 +76,6 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
     () => `${model.nodes.map((node) => node.id).join(",")}#${model.edges.length}`,
     [model],
   );
-
-  const orbit = useMemo(() => orbitLayout(model.nodes), [model.nodes]);
 
   useEffect(() => {
     if (mode !== "graph" || model.nodes.length === 0) {
@@ -96,13 +94,17 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
     };
   }, [mode, model, modelKey]);
 
-  const positions = mode === "orbs" ? orbit.positions : layout?.key === modelKey ? layout.positions : null;
+  const positions = layout?.key === modelKey ? layout.positions : null;
 
   function setExpandedSet(next: Set<string>) {
     setExpanded({ key: pathsKey, set: next });
   }
 
   function reveal(path: string) {
+    if (mode === "orbs") {
+      setOrbTarget({ path, nonce: Date.now() });
+      return;
+    }
     const next = new Set(expandedSet);
     for (const folder of folderChain(path)) {
       next.add(folder);
@@ -136,35 +138,27 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
     const palette = colorsByCluster(model.nodes.map((node) => clusterKey(node)));
     return new Map(model.nodes.map((node) => [node.id, palette.get(clusterKey(node)) ?? GRAPH_FALLBACK]));
   }, [model.nodes]);
-  const nodes: Array<FlowNode | HaloNode> = useMemo(() => {
+  const nodes: FlowNode[] = useMemo(() => {
     if (!positions) {
       return [];
     }
     const onTrace = new Set(traceNodes);
-    const drawn: Array<FlowNode | HaloNode> = model.nodes.map((node) => {
-      const box = mode === "orbs" ? orbBox(node.kind, node.fileCount) : nodeSize(node.kind);
-      const point = positions[node.id] ?? { x: 0, y: 0 };
-      return {
-        id: node.id,
-        type: mode === "orbs" ? "orb" : node.kind,
-        position: mode === "orbs" ? { x: point.x - box.width / 2, y: point.y - box.height / 2 } : point,
-        ...box,
-        zIndex: 1,
-        data: {
-          ...node,
-          dimmed: focus !== null && !focus.has(node.id),
-          selected: node.id === selected,
-          cited: citedNodes.has(node.id),
-          onTrace: onTrace.has(node.id),
-          color: colorOf.get(node.id) ?? GRAPH_FALLBACK,
-        },
-      };
-    });
-    if (mode === "orbs") {
-      drawn.unshift(...haloNodes(orbit.halos));
-    }
-    return drawn;
-  }, [model.nodes, positions, focus, selected, citedNodes, traceNodes, colorOf, mode, orbit.halos]);
+    return model.nodes.map((node) => ({
+      id: node.id,
+      type: node.kind,
+      position: positions[node.id] ?? { x: 0, y: 0 },
+      ...nodeSize(node.kind),
+      zIndex: 1,
+      data: {
+        ...node,
+        dimmed: focus !== null && !focus.has(node.id),
+        selected: node.id === selected,
+        cited: citedNodes.has(node.id),
+        onTrace: onTrace.has(node.id),
+        color: colorOf.get(node.id) ?? GRAPH_FALLBACK,
+      },
+    }));
+  }, [model.nodes, positions, focus, selected, citedNodes, traceNodes, colorOf]);
 
   const edges: Edge[] = useMemo(
     () =>
@@ -187,13 +181,13 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
           animated: touches || traced,
           style: {
             stroke: color,
-            strokeWidth: mode === "orbs" ? (touches || traced ? 1.7 : 1.1) : Math.min(1 + Math.log2(edge.weight + 1) * 0.6, 3.5) + (touches || traced ? 0.6 : 0),
+            strokeWidth: Math.min(1 + Math.log2(edge.weight + 1) * 0.6, 3.5) + (touches || traced ? 0.6 : 0),
             strokeDasharray: edge.status === "unresolved" ? "4 4" : edge.status === "resolved" ? "1 0" : undefined,
-            opacity: focus !== null && !touches && !traced ? 0.08 : mode === "orbs" ? 0.55 : 0.9,
+            opacity: focus !== null && !touches && !traced ? 0.06 : 0.9,
           },
         };
       }),
-    [model.edges, selected, focus, traceEdges, colorOf, mode],
+    [model.edges, selected, focus, traceEdges, colorOf],
   );
 
   function onSearch(event: FormEvent) {
@@ -203,14 +197,17 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
       return;
     }
     const match = paths.find((path) => path.toLowerCase().endsWith(needle)) ?? paths.find((path) => path.toLowerCase().includes(needle));
-    if (match) {
-      reveal(match);
+    if (!match) {
+      return;
+    }
+    reveal(match);
+    if (mode === "graph") {
       window.setTimeout(() => {
-        const position = layoutPoint(mode, layout, orbit.positions, match);
-        if (position) {
-          void setCenter(position.x, position.y, { zoom: mode === "orbs" ? 1.35 : 1, duration: 400 });
+        const point = layout?.positions[`file:${match}`];
+        if (point) {
+          void setCenter(point.x + 110, point.y + 36, { zoom: 1, duration: 400 });
         }
-      }, mode === "orbs" ? 40 : 450);
+      }, 450);
     }
   }
 
@@ -239,51 +236,51 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-line px-3 py-2">
-        <form onSubmit={onSearch} className="relative">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+        <form onSubmit={onSearch} className="relative min-w-40 max-w-sm flex-1">
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             aria-label="Find a file on the map"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find a file"
-            className="h-8 w-full rounded-lg border border-line bg-panel pl-8 pr-2 text-xs text-fg outline-none placeholder:text-faint focus:border-line-strong"
+            className="h-8 w-full rounded-lg border border-line bg-panel pl-8 pr-2 text-xs text-fg outline-none transition-colors placeholder:text-faint focus:border-line-strong"
           />
         </form>
-        <div className="flex h-8 items-center gap-0.5 self-start rounded-lg border border-line bg-panel p-0.5">
-          <ToolbarButton active={mode === "orbs"} onClick={() => setMode("orbs")} title="Dotted orbs, one cluster per folder">
+        <div className="ml-auto flex h-8 items-center gap-0.5 rounded-lg border border-line bg-panel p-0.5">
+          <ToolbarButton active={mode === "orbs"} onClick={() => setMode("orbs")} title="One dot per file, one blob per folder">
             <CircleDot size={13} /> Orbs
           </ToolbarButton>
           <ToolbarButton active={mode === "graph"} onClick={() => setMode("graph")} title="Labeled cards in a layered graph">
             <Network size={13} /> Graph
           </ToolbarButton>
-          <ToolbarButton active={showPackages} onClick={() => setShowPackages((value) => !value)} title="Show external packages" aria-label="Show external packages">
-            <Package size={13} />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => setExpandedSet(initialExpansion(paths))} title="Reset folders to the overview" aria-label="Reset folders to the overview">
-            <ChevronsDownUp size={13} />
-          </ToolbarButton>
+          {mode === "graph" ? (
+            <>
+              <ToolbarButton active={showPackages} onClick={() => setShowPackages((value) => !value)} title="Show external packages" aria-label="Show external packages">
+                <Package size={13} />
+              </ToolbarButton>
+              <ToolbarButton onClick={() => setExpandedSet(initialExpansion(paths))} title="Reset folders to the overview" aria-label="Reset folders to the overview">
+                <ChevronsDownUp size={13} />
+              </ToolbarButton>
+            </>
+          ) : null}
         </div>
       </div>
       <div className="relative min-h-0 flex-1">
+      {mode === "orbs" ? (
+        <OrbMap graph={graph} cited={cited} trace={trace} target={orbTarget} onOpen={onOpen} />
+      ) : (
+        <>
       <ReactFlow
-        key={`${mode}:${positions ? modelKey : "pending"}`}
+        key={positions ? modelKey : "pending"}
         fitView
-        fitViewOptions={mode === "orbs" ? ORB_FIT : FIT_VIEW}
+        fitViewOptions={FIT_VIEW}
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
-        defaultEdgeOptions={{ type: mode === "orbs" ? "default" : "smoothstep" }}
-        onNodeClick={(_, node) => {
-          if (node.type === "halo") {
-            return;
-          }
-          setSelected(node.id === selected ? null : node.id);
-        }}
+        defaultEdgeOptions={{ type: "smoothstep" }}
+        onNodeClick={(_, node) => setSelected(node.id === selected ? null : node.id)}
         onNodeDoubleClick={(_, node) => {
-          if (node.type === "halo") {
-            return;
-          }
           const data = node.data as NodeData;
           if (data.kind === "folder") {
             const next = new Set(expandedSet);
@@ -301,7 +298,7 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
       >
-        <Background variant={BackgroundVariant.Dots} gap={mode === "orbs" ? 28 : 22} size={mode === "orbs" ? 1.2 : 1} color="var(--color-line)" />
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1} color="var(--color-line)" />
         <Controls showInteractive={false} position="bottom-left" className="!m-3 !overflow-hidden !rounded-xl !border !border-line !shadow-none" />
       </ReactFlow>
 
@@ -313,7 +310,7 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
         </div>
       ) : null}
 
-      {!positions && mode === "graph" ? (
+      {!positions ? (
         <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Spinner /> Laying out {model.nodes.length} nodes
         </div>
@@ -339,12 +336,19 @@ function MapCanvas({ graph, cited, trace = [], focusPath = null, onOpen }: MapPr
           onReveal={reveal}
         />
       ) : null}
+        </>
+      )}
       </div>
     </div>
   );
 }
 
 const GRAPH_FALLBACK = "#38bdf8";
+
+/** Cards take their color from the folder they live in. */
+function clusterKey(node: Pick<MapNodeData, "kind" | "sublabel">): string {
+  return node.kind === "package" ? "packages" : node.sublabel;
+}
 
 function ownerId(path: string, nodes: MapNodeData[]): string {
   const direct = `file:${path}`;
@@ -378,30 +382,6 @@ function ToolbarButton({
       {children}
     </button>
   );
-}
-
-function layoutPoint(mode: MapMode, elk: { positions: Positions } | null, orbitPositions: Positions, path: string): { x: number; y: number } | null {
-  const id = `file:${path}`;
-  if (mode === "orbs") {
-    return orbitPositions[id] ?? null;
-  }
-  const point = elk?.positions[id];
-  return point ? { x: point.x + 110, y: point.y + 36 } : null;
-}
-
-function haloNodes(halos: Halo[]): HaloNode[] {
-  return halos.map((halo) => ({
-    id: halo.id,
-    type: "halo" as const,
-    position: { x: halo.cx - halo.radius, y: halo.cy - halo.radius },
-    width: halo.radius * 2,
-    height: halo.radius * 2,
-    data: { label: haloLabel(halo.label), color: halo.color },
-    draggable: false,
-    selectable: false,
-    connectable: false,
-    zIndex: 0,
-  }));
 }
 
 const zoomedIn = (state: { transform: [number, number, number] }) => state.transform[2] >= 0.75;
@@ -488,43 +468,5 @@ const PackageNode = memo(function PackageNode({ data }: NodeProps<FlowNode>) {
   );
 });
 
-const OrbNode = memo(function OrbNode({ data }: NodeProps<FlowNode>) {
-  return (
-    <div className={cn("group relative h-full w-full", data.dimmed && "opacity-25")} title={data.kind === "file" ? data.file?.path : data.sublabel}>
-      <Handle type="target" position={Position.Left} className="!h-px !w-px !border-0 !bg-transparent !opacity-0" />
-      <span
-        className={cn("block h-full w-full rounded-full transition-transform duration-200 group-hover:scale-125", data.kind === "package" && "border border-dashed bg-transparent")}
-        style={{
-          background: data.kind === "package" ? "transparent" : data.color,
-          borderColor: data.color,
-          boxShadow: data.selected ? `0 0 0 3px ${data.color}` : undefined,
-        }}
-      />
-      {data.kind === "folder" ? null : (
-        <span
-          className={cn(
-            "pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px]",
-            data.selected ? "text-fg" : "text-muted-foreground opacity-0 group-hover:opacity-100",
-          )}
-        >
-          {data.label}
-        </span>
-      )}
-      <Handle type="source" position={Position.Right} className="!h-px !w-px !border-0 !bg-transparent !opacity-0" />
-    </div>
-  );
-});
-
-function HaloRing({ data }: NodeProps<HaloNode>) {
-  return (
-    <div className="relative h-full w-full rounded-full border border-dashed" style={{ borderColor: `color-mix(in oklab, ${data.color} 45%, transparent)` }}>
-      <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-background/80 px-2 font-mono text-[10px] text-muted-foreground">
-        {data.label}
-      </span>
-    </div>
-  );
-}
-
-const NODE_TYPES = { folder: FolderNode, file: FileNode, package: PackageNode, orb: OrbNode, halo: HaloRing };
+const NODE_TYPES = { folder: FolderNode, file: FileNode, package: PackageNode };
 const FIT_VIEW = { padding: 0.16, maxZoom: 1.05 };
-const ORB_FIT = { padding: 0.12, minZoom: 0.3, maxZoom: 1.35 };

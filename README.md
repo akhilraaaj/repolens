@@ -6,12 +6,39 @@ Search works without a language model. Keyword search and local code embeddings 
 
 The repository code is never executed.
 
+![The RepoLens landing page: paste a repository, with a drawing of the map beside it](docs/screenshots/landing.png)
+
 ## What you get
 
-- **Overview.** Stack, entry points, core modules, and folder roles, read from the files and the import graph.
-- **Guide.** A short written tour of the commit, with links back to the files it used.
-- **Map.** Folders and files, and the imports between them.
-- **Ask.** A question answered from retrieved source. Open "How this answer was built" to see the keyword hits, the vector hits, and the fused ranking. A citation opens those lines.
+The screenshots show [vercel/swr](https://github.com/vercel/swr) at commit `8148ef0`.
+
+### Overview
+
+Stack, entry points, core modules, and folder roles, read from the files and the import graph. The sidebar shows the commit, its counts, whether search is ready, and the chat model. Keys 1 to 4 switch views.
+
+![Overview of vercel/swr: stack, entry points, and core modules](docs/screenshots/overview.png)
+
+### Map
+
+One dot per file, one cluster per folder. A band joins two folders when one imports from the other, and it grows with the number of imports. Small folders fold into their parent so the map stays readable. Muted dots are files in another language than the rest of their folder.
+
+![The Orbs map of vercel/swr](docs/screenshots/map.png)
+
+Click a folder to fade everything it is not linked to and see the import count on each band. Click a dot to see that file's declarations and the files it imports or is imported by. The Graph switch draws the same files as labeled cards.
+
+![The src/_internal folder selected on the map, with its files listed in the inspector](docs/screenshots/map-folder.png)
+
+### Guide
+
+A short written tour of the commit, with links back to the files it used. Without a chat model it is built from the README, the package manifest, folder names, and import counts.
+
+![The written guide for vercel/swr](docs/screenshots/guide.png)
+
+### Ask
+
+A question answered from retrieved source. Open "How this answer was built" to see the keyword hits, the vector hits, and the fused ranking. A citation opens those lines. Answer quality depends on the chat model; see [Choosing a model](#choosing-a-model).
+
+Every view also links into the source drawer, and `?view=map` (or `overview`, `guide`, `ask`) opens a workspace on that view.
 
 ## Limits
 
