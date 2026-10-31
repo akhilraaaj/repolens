@@ -1,0 +1,18 @@
+# Keep secrets and host-built folders out of the images. A copied macOS .venv or
+# node_modules replaces the Linux one installed in the image and breaks it.
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+.git
+.claude
+evaluation/results

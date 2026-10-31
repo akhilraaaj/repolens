@@ -20,6 +20,7 @@ RepoLens stores source from a repository the operator chose and answers question
 - Chat answers keep a paragraph only when it cites a numbered evidence item from the snapshot.
 - Answers render Markdown images as their alt text and never load the image. Links outside citations render as plain text. The extractive fallback strips images, links, and HTML tags from README lines.
 - Provider keys live in PostgreSQL. `GET /provider` and `GET /config` do not include them. A base URL with embedded credentials is rejected.
+- `.dockerignore` keeps `.env` files out of the Docker images. Compose passes `apps/api/.env` to the API container at run time only.
 - Source is sent to a hosted model only after the operator saves a hosted provider. The default is no model.
 
 ## What this does not claim

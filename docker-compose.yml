@@ -19,8 +19,19 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    # Optional chat and embedding settings, read at run time. .dockerignore keeps
+    # this file out of the image. DATABASE_URL below still wins.
+    env_file:
+      - path: apps/api/.env
+        required: false
     environment:
       DATABASE_URL: postgresql://repolens:repolens@postgres:5432/repolens
+      FASTEMBED_CACHE_PATH: /srv/models
+    # Lets the API reach an Ollama running on the host as host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - repolens-models:/srv/models
     ports:
       - "8000:8000"
     depends_on:
@@ -43,6 +54,10 @@ services:
     profiles: ["ollama"]
     ports:
       - "11434:11434"
+    volumes:
+      - repolens-ollama:/root/.ollama
 
 volumes:
   repolens-postgres:
+  repolens-models:
+  repolens-ollama:

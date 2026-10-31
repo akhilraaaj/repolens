@@ -126,7 +126,7 @@ The workspace has four views on a left icon rail:
 
 `GET /ingestions/{id}/retrieval` and `POST /ingestions/{id}/evaluation` are still served. The workspace no longer has a screen for them.
 
-Clicking a citation, a map node, or a Cmd+K result opens the source drawer on those lines. The model settings dialog also shows the snapshot facts: commit, counts, embedding model, and whether the reranker is on. The Code, Commits, Search, and Settings tabs and the file-tree pane were removed. `/commits` and `/search` are still served. `docker-compose.yml` starts Postgres, the API, and the web app. The `ollama` service is behind the `ollama` profile.
+Clicking a citation, a map node, or a Cmd+K result opens the source drawer on those lines. The model settings dialog also shows the snapshot facts: commit, counts, embedding model, and whether the reranker is on. The Code, Commits, Search, and Settings tabs and the file-tree pane were removed. `/commits` and `/search` are still served. `docker-compose.yml` starts Postgres, the API, and the web app. The `ollama` service is behind the `ollama` profile, and its models persist in the `repolens-ollama` volume. The API container reads `apps/api/.env` at run time when it exists, keeps the local embedding model in the `repolens-models` volume (`FASTEMBED_CACHE_PATH`), and reaches an Ollama on the host as `host.docker.internal`.
 
 ## Boundaries
 

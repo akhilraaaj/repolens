@@ -31,6 +31,27 @@ Open [http://localhost:3000](http://localhost:3000). The API listens on port 800
 
 `docker compose --profile ollama up --build` also starts Ollama. You still choose the model in the app.
 
+Inside Docker, `127.0.0.1` is the API container, not your machine. In the model dialog, use one of these base URLs:
+
+- `http://ollama:11434` for the Ollama started by the `ollama` profile. Pull a model into it first with `docker compose exec ollama ollama pull qwen2.5-coder:7b`.
+- `http://host.docker.internal:11434` for an Ollama already running on your machine.
+
+Compose passes `apps/api/.env` to the API at run time when that file exists. `.dockerignore` keeps it, and any `node_modules` or `.venv` from local development, out of the images. The local embedding model is downloaded once into the `repolens-models` volume.
+
+## Choosing a model
+
+RepoLens does not ship or host a model. Pick one of these:
+
+| Setup | What works | Where source goes |
+| --- | --- | --- |
+| No model | Overview, Map, source, keyword and vector search. Ask quotes the matching lines. The Guide is built from the README, manifest, and imports. | Nowhere |
+| Local Ollama | Everything, with written answers and a written Guide | Stays on your machine |
+| Hosted, OpenAI-compatible (OpenAI, OpenRouter, and others) | Everything, usually with the best answers | Retrieved excerpts are sent to that provider |
+
+Set the model with the model button in the app, or set `REPOLENS_CHAT_BASE_URL`, `REPOLENS_CHAT_MODEL`, and `REPOLENS_CHAT_API_KEY` in `apps/api/.env`. A model saved in the app wins. For a hosted provider, the base URL includes the API version, for example `https://api.openai.com/v1` or `https://openrouter.ai/api/v1`.
+
+Answer quality depends on the model. RepoLens keeps only paragraphs that cite retrieved lines. A model that ignores the citation format gets its answer replaced by quoted lines, so small or free models often look terse. A larger instruction-following model cites more reliably. No particular model has been benchmarked here.
+
 ## Local development
 
 - Node.js 20.9 or newer
